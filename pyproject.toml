@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "shanyraq-api"
+version = "0.1.0"
+description = ""
+authors = ["Nurmash Omarbek <nurmash98@github.com>"]
+readme = "README.md"
+packages = [{include = "shanyraq_api"}]
+
+[tool.poetry.dependencies]
+python = "^3.11"
+uvicorn = "^0.23.1"
+fastapi = "^0.100.1"
+sqlalchemy = "^2.0.19"
+pydantic = "^2.1.1"
+alembic = "^1.11.1"
+python-jose = {extras = ["cryptography"], version = "^3.3.0"}
+python-multipart = "^0.0.6"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
