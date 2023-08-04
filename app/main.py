@@ -7,6 +7,7 @@ from schemas.CommentModel import *
 from app.users_repository import User, UsersRepository
 from app.comments_repository import Comment, CommentsRepository
 from app.announcement_repository import Announcement, AnnouncementRepository
+from app.favourites_repository import FavoursRepository
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import jwt
 from typing import List, Annotated
@@ -22,6 +23,7 @@ def get_db():
 users_repo = UsersRepository()
 comments_repo = CommentsRepository()
 announce_repo = AnnouncementRepository()
+favours_repo = FavoursRepository()
 def encode_jwt(username: str, user_id: int) -> str:
     body = {"username" : username, "user_id" : user_id}
     token = jwt.encode(body, "Haha", "HS256")
@@ -93,7 +95,7 @@ def get_profile(token: Annotated[str, Depends(oauth2_schema)]):
 @app.post("/shanyraks")
 def post_announcement(
     announce: PostAnnouncement, 
-    token: Annotated[str, Depends(oauth2_schema)]):
+    token: Annotated[str, Depends(oauth2_schema)]) -> int:
     try:
         session = SessionLocal()
         user_id = decode_jwt(token)['user_id']
@@ -119,12 +121,14 @@ def update_announcement(
     announce: UpdateAnnouncement, 
     token: Annotated[str, Depends(oauth2_schema)]):
     try:
-        user_id = decode_jwt(token)['user_id']
         session = SessionLocal()
-        isUpdated = announce_repo.update(session, announce_id, user_id, announce)
-        if not isUpdated:
-            return Response("User hasn't allow to change this announce")
-        return Response("Announce successfully has changed")
+        user_id = decode_jwt(token)['user_id']
+        announce = announce_repo.get_by_id(session, announce_id)
+        if not announce:
+            raise HTTPException(status_code = 404, detail = "Announce not found")
+        if announce.user_id != user_id:
+            raise HTTPException(status_code=403, detail = "Forbidden")
+        announce_repo.update(session, announce_id, user_id, announce)
     finally:
         session.close()
 
@@ -135,10 +139,12 @@ def delete_announcement(
     try:
         session = SessionLocal()
         user_id = decode_jwt(token)['user_id']
-        isDeleted = announce_repo.delete(session, announce_id, user_id)
-        if not isDeleted:
-            return Response("User hasn't allow to delete this announce")
-        return Response("Announce successfully has deleted")
+        announce = announce_repo.get_by_id(session, announce_id)
+        if not announce:
+            raise HTTPException(status_code = 404, detail = "Announce not found")
+        if announce.user_id != user_id:
+            raise HTTPException(status_code=403, detail = "Forbidden")
+        announce_repo.delete(session, announce_id, user_id)
     finally:
         session.close()
         
@@ -160,6 +166,8 @@ def get_comments(announce_id: int):
     try:
         session = SessionLocal()
         comments = comments_repo.get_by_announceID(session, announce_id)
+        if not comments:
+            raise HTTPException(status_code = 404, detail = "Comments not found")
         return comments
     finally:
         session.close()
@@ -173,9 +181,14 @@ def update_comment(
     try:
         session = SessionLocal()
         user_id = decode_jwt(token)['user_id']
-        isUpdated = comments_repo.update(session, announce_id, comment_id, user_id, comment)
-        if not isUpdated:
-            return Response("Not allowed commands")
+        comment = comments_repo.get_by_id(session, comment_id)
+        if not comment:
+            raise HTTPException(status_code = 404, detail = "Comment not found")
+        if comment.user_id != user_id:
+            raise HTTPException(status_code=403, detail = "Forbidden")
+        if comment.announce_id!= announce_id:
+            raise HTTPException(status_code=403, detail = "Forbidden")
+        comments_repo.update(session, comment_id, user_id, comment)
         return Response("Successfully updated")
     finally:
         session.close()
@@ -188,8 +201,83 @@ def delete_comment(
     try:
         session = SessionLocal()
         user_id = decode_jwt(token)['user_id']
-        isUpdated = comments_repo.delete(session, announce_id, comment_id, user_id)
-        if isUpdated:
-            return Response("Successfully deleted")
+        comment = comments_repo.get_by_id(session, comment_id)
+        if not comment:
+            raise HTTPException(status_code = 404, detail = "Comment not found")
+        if comment.user_id != user_id:
+            raise HTTPException(status_code=403, detail = "Forbidden")
+        if comment.announce_id!= announce_id:
+            raise HTTPException(status_code=403, detail = "Forbidden")
+        comments_repo.update(session, comment_id, user_id, comment)
+        comments_repo.delete(session, announce_id, comment_id, user_id)
+        return Response("Successfully deleted")
+        
+    finally:
+        session.close()
+
+#POST /auth/users/favorites/shanyraks/{id}
+@app.post("/auth/users/favorites/shanyraks/{announce_id}")
+def post_favorite(
+    announce_id: int, 
+    token: Annotated[str, Depends(oauth2_schema)]):
+    try:
+        session = SessionLocal()
+        user_id = decode_jwt(token)['user_id']
+        favorite = favours_repo.save(session, user_id, announce_id)
+        return favorite
+    finally:
+        session.close()
+
+@app.get("/auth/users/favorites/shanyraks")
+def get_favorites(token: Annotated[str, Depends(oauth2_schema)]):
+    try:
+        session = SessionLocal()
+        user_id = decode_jwt(token)['user_id']
+        favorites = favours_repo.get_by_user_id(session, user_id)
+        if not favorites:
+            raise HTTPException(status_code = 404, detail = "Favorites not found")
+        favours = []
+        for favour in favorites:
+            announce = announce_repo.get_by_id(session, favour.announce_id)
+            if not announce:
+                raise HTTPException(status_code = 404, detail = "Announce not found")
+            favours.append({"id": announce.announce_id, "address": announce.address})
+        return {"shanyraks" : favours}
+    finally:
+        session.close()
+
+@app.delete("/auth/users/favorites/shanyraks/{favour_id}")
+def delete_favorite(
+    favour_id: int, 
+    token: Annotated[str, Depends(oauth2_schema)]):
+    try:
+        session = SessionLocal()
+        user_id = decode_jwt(token)['user_id']
+        favorite = favours_repo.get_by_id(session, favour_id)
+        if not favorite:
+            raise HTTPException(status_code = 404, detail = "Favorite not found")
+        if favorite.user_id!= user_id:
+            raise HTTPException(status_code=403, detail = "Forbidden")
+        favours_repo.delete(session, favour_id)
+        return Response("Successfully deleted")
+    finally:
+        session.close()
+
+        
+@app.get("/shanyraks")
+def get_announcements(query: QueryAnnouncement):
+    try:
+        session = SessionLocal()
+        limit = query.limit
+        offset = query.offset
+        announcements = announce_repo.get_by_query(session, query)
+        if not announcements:
+            raise HTTPException(status_code = 404, detail = "Announcements not found")
+        if not limit or not offset:
+            return announcements
+        else:
+            start_index = (offset - 1)*limit
+            end_index = offset*limit
+            return announcements[start_index:end_index]
     finally:
         session.close()

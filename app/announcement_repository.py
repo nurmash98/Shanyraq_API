@@ -39,9 +39,8 @@ class AnnouncementRepository:
     def get_by_id(self, db: Session, announce_id: int):
         announce = db.query(Announcement).filter(Announcement.announce_id == announce_id).first()
         return announce
-    
+
     def update(self, db: Session, announce_id: int, user_id: int,  announce = UpdateAnnouncement):
-        
         db.query(Announcement).filter(and_(Announcement.announce_id == announce_id, Announcement.user_id == user_id)).update({
             Announcement.address: announce.address,
             Announcement.area: announce.area,
@@ -60,6 +59,18 @@ class AnnouncementRepository:
         db.query(Announcement).filter(Announcement.announce_id == announce_id).delete()
         db.commit()
         return True
+    
+    def get_by_query(self, db: Session, query: QueryAnnouncement):
+        announcements = db.query(Announcement)
+        if query.type:
+            announcements = announcements.filter(Announcement.type == query.type).all()
+        if query.rooms_count:
+            announcements = announcements.filter(Announcement.price == query.price).all()
+        if query.price_from:
+            announcements = announcements.filter(Announcement.price >= query.price_from).all()
+        if query.price_until:
+            announcements = announcements.filter(Announcement.price <= query.price_until).all()
+        return announcements
 
 
    

@@ -7,6 +7,7 @@ from app.database import Base
 from app.users_repository import User
 from app.announcement_repository import Announcement
 from app.comments_repository import Comment
+from app.favourites_repository import Favour
 
 from alembic import context
 
