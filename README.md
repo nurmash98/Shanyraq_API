@@ -1,7 +1,6 @@
 # Shanyraq_API
 
-### How to launch project
-
+### Steps to launch project
 ```
   1) pip install poetry
   2) poetry init
